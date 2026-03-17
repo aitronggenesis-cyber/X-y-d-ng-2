@@ -398,4 +398,4 @@ function Player({game,user,onBack,theme}:{game:Game;user:User|null;onBack:()=>vo
         <button onClick={onBack} style={sBtn}>← Về</button>
         <span style={{fontSize:22}}>{game.thumb}</span>
         <div style={{flex:1}}>
-          <div style={{fontWeight:900,fontSize:15,color:t.text}}
+          <div style={{fontWeight:900,fontSize:15,color:t.text}}>{game.name}</div>

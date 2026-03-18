@@ -1,402 +1,214 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
-import {
-  supabase, playSound, playBgMusic, timeAgo, fmtNum, addXP,
-  makeInputStyle, makeSmallBtn, getThemeColors,
-  getLevelFromXP, getXPProgress, xpForLevel, LEVEL_TITLES,
-  Block, Game, Comment, Notification, SpriteActor, Particle, Theme,
-  GameVariable, BLOCK_CATS, SPRITES, AVATARS, PARTICLE_SETS,
-  BG_COLORS, MUSIC_TRACKS, GAME_TEMPLATES,
-} from "./types";
+import { supabase, getT, iStyle, sBtn, timeAgo, fmtNum, addXP, getLevelFromXP, getXPProgress, LEVEL_TITLES, AVATARS, Game, Comment, Notification, Theme } from "./types";
 
-// ── MODAL ────────────────────────────────────
+// ── MODAL ──────────────────────────────────
 export function Modal({children,onClose,theme}:{children:React.ReactNode;onClose:()=>void;theme:Theme}) {
-  const t=getThemeColors(theme);
+  const t=getT(theme);
   return(
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",
-      display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:t.bg2,borderRadius:"22px 22px 0 0",
-        padding:"20px 18px 36px",width:"100%",maxWidth:480,maxHeight:"88vh",overflowY:"auto"}}>
-        <div style={{width:40,height:4,background:t.border,borderRadius:2,margin:"0 auto 16px"}}/>
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(4px)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300,animation:"fadeIn 0.15s ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:t.bg2,borderRadius:"24px 24px 0 0",padding:"20px 18px 40px",width:"100%",maxWidth:480,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,0.4)",animation:"slideUp 0.25s cubic-bezier(0.34,1.56,0.64,1)"}}>
+        <div style={{width:44,height:5,background:t.border,borderRadius:99,margin:"0 auto 18px"}}/>
         {children}
       </div>
     </div>
   );
 }
 
-// ── XP BAR ───────────────────────────────────
+// ── XP BAR ─────────────────────────────────
 export function XPBar({xp,theme}:{xp:number;theme:Theme}) {
-  const t=getThemeColors(theme);
+  const t=getT(theme);
   const level=getLevelFromXP(xp);
-  const progress=getXPProgress(xp);
+  const prog=getXPProgress(xp);
   const title=LEVEL_TITLES[Math.min(level,LEVEL_TITLES.length-1)]||"👑";
   return(
-    <div style={{background:t.bg3,borderRadius:12,padding:"8px 12px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+    <div style={{background:t.bg3,borderRadius:14,padding:"10px 14px",border:"1px solid "+t.border}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
         <span style={{fontWeight:800,fontSize:13,color:t.text}}>{title} Lv.{level}</span>
-        <span style={{fontSize:11,color:"#FFB829",fontWeight:700}}>{xp} XP</span>
+        <span style={{fontSize:11,color:"#FFB829",fontWeight:700,background:"#FFB82922",padding:"2px 8px",borderRadius:99}}>{xp} XP</span>
       </div>
-      <div style={{background:t.border,borderRadius:99,height:8,overflow:"hidden"}}>
-        <div style={{background:"linear-gradient(90deg,#FFB829,#FF6B6B)",
-          height:"100%",width:String(progress)+"%",
-          borderRadius:99,transition:"width 0.5s ease"}}/>
+      <div style={{background:t.border,borderRadius:99,height:7,overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(90deg,#FFB829,#FF6B35)",height:"100%",width:String(prog)+"%",borderRadius:99,transition:"width 0.6s ease",boxShadow:"0 0 8px #FFB82966"}}/>
       </div>
-      <div style={{fontSize:10,color:t.text2,marginTop:3,textAlign:"right"}}>
-        {progress}% tới Lv.{level+1}
-      </div>
+      <div style={{fontSize:10,color:t.text2,marginTop:3,textAlign:"right"}}>{prog}% → Lv.{level+1}</div>
     </div>
   );
 }
 
-// ── PARTICLES ────────────────────────────────
-export function ParticleLayer({particles}:{particles:Particle[]}) {
+// ── GAME CARD ──────────────────────────────
+export function GameCard({game,onClick,onPlay,onComment,onDelete,showDelete,theme}:{
+  game:Game; onClick:()=>void; onPlay?:()=>void; onComment?:()=>void;
+  onDelete?:(e:React.MouseEvent)=>void; showDelete?:boolean; theme:Theme;
+}) {
+  const t=getT(theme);
+  const catColors:Record<string,string>={Action:"#FF6B6B",Puzzle:"#A259FF",Adventure:"#4F8EF7",RPG:"#FFB829",Racing:"#00E676"};
   return(
-    <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden",zIndex:20}}>
-      {particles.map(p=>(
-        <div key={p.id} style={{
-          position:"absolute",
-          left:String(p.x)+"%",top:String(p.y)+"%",
-          fontSize:p.size,opacity:p.life,
-          transform:"translate(-50%,-50%)",
-        }}>{p.emoji}</div>
-      ))}
+    <div style={{background:t.card,borderRadius:18,overflow:"hidden",cursor:"pointer",
+      border:"1px solid "+t.border,position:"relative",
+      boxShadow:"0 4px 20px rgba(0,0,0,0.2)",transition:"transform 0.15s, box-shadow 0.15s"}}
+      onClick={onClick}>
+      {/* Thumbnail */}
+      <div style={{background:"linear-gradient(135deg,#1e1e4a 0%,#0d0d2a 50%,#1a1a3e 100%)",height:90,display:"flex",alignItems:"center",justifyContent:"center",fontSize:46,position:"relative"}}>
+        {game.thumb}
+        {/* Badges */}
+        <div style={{position:"absolute",bottom:6,right:6,display:"flex",gap:3}}>
+          {(game.actors||[]).length>0&&<span style={{background:"rgba(79,142,247,0.9)",borderRadius:6,padding:"1px 5px",fontSize:8,color:"#fff",fontWeight:700}}>+{(game.actors||[]).length}🎭</span>}
+          {(game.variables||[]).length>0&&<span style={{background:"rgba(0,200,83,0.9)",borderRadius:6,padding:"1px 5px",fontSize:8,color:"#fff",fontWeight:700}}>{(game.variables||[]).length}📊</span>}
+          {game.bgMusic&&game.bgMusic!=="none"&&<span style={{background:"rgba(0,229,255,0.9)",borderRadius:6,padding:"1px 5px",fontSize:8,color:"#000",fontWeight:700}}>🎵</span>}
+        </div>
+        {game.is_public&&<div style={{position:"absolute",top:6,left:6,background:"linear-gradient(135deg,#00C853,#69F0AE)",borderRadius:8,padding:"2px 7px",fontSize:9,fontWeight:800,color:"#000"}}>PUBLIC</div>}
+      </div>
+      {/* Info */}
+      <div style={{padding:"8px 10px 10px"}}>
+        <div style={{fontWeight:800,fontSize:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:t.text,marginBottom:2}}>{game.name}</div>
+        {game.username&&<div style={{fontSize:10,color:t.text2,marginBottom:5}}>{"@"+game.username}</div>}
+        {(game.plays!==undefined||game.likes!==undefined)&&(
+          <div style={{display:"flex",gap:8,marginBottom:5}}>
+            {game.plays!==undefined&&<span style={{fontSize:10,color:"#4F8EF7",fontWeight:700}}>▶ {fmtNum(game.plays)}</span>}
+            {game.likes!==undefined&&<span style={{fontSize:10,color:"#FF6B6B",fontWeight:700}}>❤️ {fmtNum(game.likes)}</span>}
+          </div>
+        )}
+        {(onPlay||onComment||showDelete)&&(
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+            {onPlay&&<button onClick={e=>{e.stopPropagation();onPlay();}} style={{background:"linear-gradient(135deg,#00C853,#69F0AE)",border:"none",borderRadius:8,padding:"3px 10px",fontSize:10,color:"#000",cursor:"pointer",fontWeight:800,fontFamily:"inherit"}}>▶ Chơi</button>}
+            {onComment&&<button onClick={e=>{e.stopPropagation();onComment();}} style={{background:"#4F8EF722",border:"1px solid #4F8EF744",borderRadius:8,padding:"3px 8px",fontSize:10,color:"#4F8EF7",cursor:"pointer",fontWeight:700,fontFamily:"inherit"}}>💬</button>}
+            {showDelete&&onDelete&&<button onClick={onDelete} style={{marginLeft:"auto",background:"transparent",border:"none",color:t.text2,fontSize:13,cursor:"pointer",padding:"0 2px"}}>🗑</button>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ── STAGE ────────────────────────────────────
-export interface StageProps {
-  sprite:string; pos:{x:number;y:number}; scale:number;
-  hidden:boolean; flash:boolean; rotation:number;
-  bubble:string|null; score:number; running:boolean;
-  particles:Particle[]; actors:SpriteActor[]; theme:Theme;
-  bgColor?:string; groundColor?:string; groundBorder?:string;
-  variables?:Record<string,number|string>;
-}
-export function Stage({sprite,pos,scale,hidden,flash,rotation,bubble,score,running,particles,actors,theme,bgColor,groundColor,groundBorder,variables}:StageProps) {
-  const isDark=theme==="dark";
-  const defaultBg=isDark?"linear-gradient(180deg,#0a1628,#0d1e36 70%,#0a1010)":"linear-gradient(180deg,#87CEEB,#98D8C8 70%,#90EE90)";
-  const defaultGround=isDark?"linear-gradient(180deg,#163016,#0a1a0a)":"linear-gradient(180deg,#228B22,#1a6b1a)";
-  return(
-    <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden",
-      background:bgColor||defaultBg}}>
-      {(!bgColor||bgColor.includes("#0a1628"))&&[0,1,2,3,4,5,6,7,8,9,10,11,12,13].map(i=>(
-        <div key={i} style={{position:"absolute",
-          width:i%3===0?3:2,height:i%3===0?3:2,
-          background:"#fff",borderRadius:"50%",
-          left:String((i*43+7)%94)+"%",
-          top:String((i*31+8)%78)+"%",opacity:0.3}}/>
-      ))}
-      <div style={{position:"absolute",bottom:0,left:0,right:0,height:32,
-        background:groundColor||defaultGround,
-        borderTop:"2px solid "+(groundBorder||(isDark?"#2a5a2a":"#1a5a1a"))}}/>
-      {actors.map(a=>(
-        a.hidden?null:
-        <div key={a.id} style={{position:"absolute",
-          left:String(a.pos.x)+"%",bottom:String(100-a.pos.y)+"%",
-          fontSize:28*a.scale,transform:"rotate("+String(a.rotation)+"deg)",
-          transition:"all 0.3s ease",
-          filter:running?"drop-shadow(0 0 6px "+a.color+")":"none",zIndex:5}}>
-          {a.emoji}
-        </div>
-      ))}
-      {bubble&&(
-        <div style={{position:"absolute",
-          left:String(Math.min(pos.x+6,58))+"%",
-          top:String(Math.max(pos.y-26,4))+"%",
-          background:"#fff",color:"#000",padding:"4px 10px",borderRadius:10,
-          fontSize:12,fontWeight:800,whiteSpace:"nowrap",zIndex:15}}>
-          {bubble}
-          <div style={{position:"absolute",bottom:-7,left:10,width:0,height:0,
-            borderLeft:"7px solid transparent",borderRight:"7px solid transparent",
-            borderTop:"7px solid #fff"}}/>
-        </div>
-      )}
-      <div style={{position:"absolute",
-        left:String(pos.x)+"%",bottom:String(100-pos.y)+"%",
-        fontSize:34*scale,transition:"all 0.3s cubic-bezier(0.34,1.56,0.64,1)",
-        transform:"rotate("+String(rotation)+"deg)",
-        opacity:hidden?0:flash?0.2:1,
-        filter:running?"drop-shadow(0 0 10px #4F8EF7)":"none",zIndex:10}}>
-        {sprite}
-      </div>
-      <ParticleLayer particles={particles}/>
-      <div style={{position:"absolute",top:6,left:8,background:"rgba(0,0,0,0.6)",
-        borderRadius:8,padding:"2px 8px",fontSize:12,fontWeight:800,color:"#fff",zIndex:20}}>
-        {"⭐ "+score}
-      </div>
-      {variables&&Object.keys(variables).length>0&&(
-        <div style={{position:"absolute",top:6,right:8,background:"rgba(0,0,0,0.6)",
-          borderRadius:8,padding:"2px 8px",fontSize:10,color:"#aaa",zIndex:20}}>
-          {Object.entries(variables).slice(0,2).map(([k,v])=>k+": "+v).join(" | ")}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── GAME ENGINE ──────────────────────────────
-let particleId=1;
-export function spawnParticles(type:string,x:number,y:number,setParticles:React.Dispatch<React.SetStateAction<Particle[]>>) {
-  const set=PARTICLE_SETS[type as keyof typeof PARTICLE_SETS]||PARTICLE_SETS.stars;
-  const newP:Particle[]=Array.from({length:8}).map(()=>({
-    id:particleId++,
-    x:x+(Math.random()-0.5)*20,y:y+(Math.random()-0.5)*10,
-    vx:(Math.random()-0.5)*3,vy:-(Math.random()*3+1),
-    life:1,emoji:set[Math.floor(Math.random()*set.length)],size:14+Math.random()*12,
-  }));
-  setParticles(p=>[...p,...newP]);
-  let frame=0;
-  const animate=()=>{
-    frame++;
-    setParticles(p=>p.map(x=>({...x,y:x.y+x.vy*0.8,x:x.x+x.vx*0.8,life:x.life-0.04})).filter(x=>x.life>0));
-    if(frame<30) requestAnimationFrame(animate);
+// ── AUTH ───────────────────────────────────
+export function AuthScreen({onAuth,theme}:{onAuth:(u:User)=>void;theme:Theme}) {
+  const [mode,setMode]=useState<"login"|"signup">("login");
+  const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [name,setName]=useState("");
+  const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
+  const t=getT(theme); const iS=iStyle(theme);
+  const submit=async()=>{
+    setErr("");setLoading(true);
+    if(mode==="login"){const{data,error}=await supabase.auth.signInWithPassword({email,password:pass});if(error)setErr(error.message);else if(data.user)onAuth(data.user);}
+    else{const{data,error}=await supabase.auth.signUp({email,password:pass,options:{data:{username:name,avatar:"😎"}}});if(error)setErr(error.message);else if(data.user)onAuth(data.user);else setErr("Kiểm tra email!");}
+    setLoading(false);
   };
-  requestAnimationFrame(animate);
+  return(
+    <div style={{minHeight:"100vh",background:t.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Nunito',sans-serif",color:t.text}}>
+      <div style={{fontSize:60,marginBottom:8,filter:"drop-shadow(0 4px 16px #4F8EF766)"}}>🎮</div>
+      <div style={{fontWeight:900,fontSize:28,marginBottom:4,background:"linear-gradient(90deg,#4F8EF7,#A259FF)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>GameBuilder</div>
+      <div style={{fontSize:12,color:t.text2,marginBottom:36,letterSpacing:1.5}}>TẠO GAME KHÔNG CẦN CODE</div>
+      <div style={{width:"100%",maxWidth:380,background:t.bg2,borderRadius:24,padding:24,boxShadow:"0 8px 40px rgba(0,0,0,0.25)",border:"1px solid "+t.border}}>
+        <div style={{display:"flex",gap:4,marginBottom:22,background:t.bg3,borderRadius:14,padding:4}}>
+          {(["login","signup"] as const).map(m=>(
+            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:12,border:"none",background:mode===m?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"transparent",color:mode===m?"#fff":t.text2,fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s",boxShadow:mode===m?"0 2px 12px #4F8EF755":"none"}}>
+              {m==="login"?"Đăng nhập":"Đăng ký"}
+            </button>
+          ))}
+        </div>
+        {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Tên hiển thị..." style={iS}/>}
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email..." type="email" style={iS}/>
+        <input value={pass} onChange={e=>setPass(e.target.value)} placeholder="Mật khẩu..." type="password" style={iS} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+        {err&&<div style={{color:"#ff6b6b",fontSize:12,marginBottom:10,textAlign:"center",padding:"6px",background:"#ff6b6b11",borderRadius:8}}>{err}</div>}
+        <button onClick={submit} disabled={loading||!email||!pass} style={{width:"100%",padding:"14px",background:!email||!pass?"#2a2a4a":"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"none",borderRadius:14,color:"#fff",fontWeight:900,fontSize:15,cursor:!email||!pass?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:!email||!pass?"none":"0 4px 20px #4F8EF755",transition:"all 0.2s"}}>
+          {loading?"⏳...":(mode==="login"?"🚀 Đăng nhập":"✨ Đăng ký")}
+        </button>
+      </div>
+    </div>
+  );
 }
 
-export async function runEngine(
-  blocks:Block[], sprite:string,
-  cb:{setPos:Function;setScale:Function;setBubble:Function;setHidden:Function;
-      setScore:Function;setRotation:Function;setFlash:Function;setLog:Function;
-      setRunning:Function;setParticles:Function;setVars:Function;
-      pos:{x:number;y:number};vars:Record<string,number|string>;}
-) {
-  const l:string[]=[];
-  const push=(m:string)=>{l.push(m);cb.setLog([...l]);};
-  let stopped=false;
-  for(const b of blocks){
-    if(stopped) break;
-    await new Promise(r=>setTimeout(r,b.blockId==="forever"?100:480));
-    const val=b.value?Number(b.value)||b.value:10;
-    switch(b.blockId){
-      case "on_start":   push("🎮 Bắt đầu!"); break;
-      case "on_tap":     push("👆 Chờ chạm..."); break;
-      case "on_key":     push("⌨️ Chờ phím..."); break;
-      case "on_score":   push("🎯 Kiểm tra điểm..."); break;
-      case "move_right": cb.setPos((p:any)=>({...p,x:Math.min(p.x+Number(val),78)})); push("▶ Đi phải "+val); break;
-      case "move_left":  cb.setPos((p:any)=>({...p,x:Math.max(p.x-Number(val),5)}));  push("◀ Đi trái "+val); break;
-      case "move_up":    cb.setPos((p:any)=>({...p,y:Math.max(p.y-Number(val),10)})); push("⬆ Lên "+val); break;
-      case "move_down":  cb.setPos((p:any)=>({...p,y:Math.min(p.y+Number(val),80)})); push("⬇ Xuống "+val); break;
-      case "jump":
-        cb.setPos((p:any)=>({...p,y:p.y-24})); playSound("jump");
-        spawnParticles("stars",cb.pos.x,cb.pos.y,cb.setParticles);
-        await new Promise(r=>setTimeout(r,300));
-        cb.setPos((p:any)=>({...p,y:p.y+24})); push("⬆ Nhảy!"); break;
-      case "teleport": cb.setPos({x:Math.random()*70+5,y:55}); push("🌀 Dịch chuyển!"); break;
-      case "spin":     cb.setRotation((r:number)=>r+360); push("🔄 Xoay!"); break;
-      case "say":      cb.setBubble(b.value||"Xin chào!"); push("💬 "+(b.value||"Xin chào!"));
-        await new Promise(r=>setTimeout(r,1200)); cb.setBubble(null); break;
-      case "grow":     cb.setScale((s:number)=>Math.min(s+0.3,2.2)); push("🔍 To ra"); break;
-      case "shrink":   cb.setScale((s:number)=>Math.max(s-0.3,0.4)); push("🔎 Nhỏ"); break;
-      case "hide":     cb.setHidden(true);  push("👻 Ẩn"); break;
-      case "show":     cb.setHidden(false); push("👁️ Hiện"); break;
-      case "flash":    cb.setFlash(true); await new Promise(r=>setTimeout(r,400)); cb.setFlash(false); push("✨ Flash!"); break;
-      case "change_color": push("🎨 Đổi màu!"); break;
-      case "play_jump": playSound("jump"); push("🔊 Jump!"); break;
-      case "play_win":  playSound("win");  push("🏆 Win!"); break;
-      case "play_pop":  playSound("pop");  push("💥 Pop!"); break;
-      case "play_sad":  playSound("sad");  push("😢 Sad!"); break;
-      case "particle_stars":  spawnParticles("stars",cb.pos.x,cb.pos.y,cb.setParticles);  push("⭐ Sao!"); break;
-      case "particle_fire":   spawnParticles("fire",cb.pos.x,cb.pos.y,cb.setParticles);   push("🔥 Lửa!"); break;
-      case "particle_hearts": spawnParticles("hearts",cb.pos.x,cb.pos.y,cb.setParticles); push("❤️ Tim!"); break;
-      case "particle_coins":  spawnParticles("coins",cb.pos.x,cb.pos.y,cb.setParticles);  playSound("pop"); push("💰 Coin!"); break;
-      case "particle_snow":   spawnParticles("snow",cb.pos.x,cb.pos.y,cb.setParticles);   push("❄️ Tuyết!"); break;
-      case "score_add":
-        cb.setScore((s:number)=>s+1);
-        spawnParticles("coins",cb.pos.x,cb.pos.y,cb.setParticles);
-        playSound("pop"); push("⭐ +1!"); break;
-      case "score_set": cb.setScore(Number(val)); push("📌 Điểm = "+val); break;
-      case "var_add":   cb.setVars((v:any)=>({...v,score:(Number(v.score||0)+Number(val))})); push("📈 +"+val); break;
-      case "show_score":push("💯 Hiện điểm"); break;
-      case "if_score":  push("🎯 Nếu điểm >= "+val); break;
-      case "repeat":    push("🔁 Lặp "+(b.value||3)+" lần"); break;
-      case "wait":      push("⏳ Chờ "+(b.value||1)+"s"); await new Promise(r=>setTimeout(r,(Number(b.value)||1)*1000)); break;
-      case "if_touch":  push("🤔 Kiểm tra va chạm..."); break;
-      case "forever":   push("♾️ Lặp mãi..."); break;
-      case "stop":      stopped=true; push("⏹ Dừng!"); break;
-    }
-  }
-  if(!stopped){ playSound("win"); spawnParticles("stars",50,50,cb.setParticles); push("🏁 Xong!"); }
-  cb.setRunning(false);
-}
-
-// ── TEMPLATE PICKER ──────────────────────────
-export function TemplatePicker({onSelect,onClose,theme}:{onSelect:(t:typeof GAME_TEMPLATES[0])=>void;onClose:()=>void;theme:Theme}) {
-  const t=getThemeColors(theme);
+// ── PROFILE EDITOR ─────────────────────────
+export function ProfileEditor({user,onClose,theme}:{user:User;onClose:()=>void;theme:Theme}) {
+  const c=user.user_metadata;
+  const [name,setName]=useState((c?.username as string)||"");
+  const [avatar,setAvatar]=useState((c?.avatar as string)||"😎");
+  const [bio,setBio]=useState((c?.bio as string)||"");
+  const [saving,setSaving]=useState(false);
+  const [done,setDone]=useState(false);
+  const t=getT(theme); const iS=iStyle(theme);
+  const save=async()=>{setSaving(true);await supabase.auth.updateUser({data:{username:name,avatar,bio}});setSaving(false);setDone(true);setTimeout(()=>{setDone(false);onClose();},1200);};
   return(
     <Modal onClose={onClose} theme={theme}>
-      <div style={{fontWeight:900,fontSize:17,marginBottom:14,textAlign:"center",color:t.text}}>
-        🎮 Chọn Template
+      <div style={{fontWeight:900,fontSize:17,marginBottom:16,textAlign:"center",color:t.text}}>✏️ Chỉnh Profile</div>
+      <div style={{textAlign:"center",marginBottom:14}}>
+        <div style={{fontSize:56,marginBottom:10,filter:"drop-shadow(0 4px 12px rgba(0,0,0,0.3))"}}>{avatar}</div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap",justifyContent:"center"}}>
+          {AVATARS.map(a=>(
+            <button key={a} onClick={()=>setAvatar(a)} style={{background:avatar===a?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"transparent",border:avatar===a?"2px solid #4F8EF7":"2px solid "+t.border,borderRadius:12,padding:"6px 8px",fontSize:22,cursor:"pointer",transition:"all 0.15s",transform:avatar===a?"scale(1.15)":"scale(1)"}}>{a}</button>
+          ))}
+        </div>
       </div>
-      {GAME_TEMPLATES.map(tmp=>(
-        <div key={tmp.id} onClick={()=>onSelect(tmp)} style={{
-          background:t.bg3,borderRadius:14,padding:"12px 14px",marginBottom:10,
-          cursor:"pointer",border:"1px solid "+t.border,
-          display:"flex",gap:12,alignItems:"center",
-        }}>
-          <span style={{fontSize:36}}>{tmp.thumb}</span>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:800,fontSize:14,color:t.text}}>{tmp.name}</div>
-            <div style={{fontSize:12,color:t.text2,marginTop:2}}>{tmp.desc}</div>
-            <div style={{display:"flex",gap:8,marginTop:4}}>
-              <span style={{fontSize:10,color:"#4F8EF7"}}>{tmp.blocks.length} blocks</span>
-              <span style={{fontSize:10,color:"#00C853"}}>{tmp.variables.length} biến</span>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tên..." style={iS}/>
+      <input value={bio} onChange={e=>setBio(e.target.value)} placeholder="Bio..." style={iS}/>
+      {done?<div style={{textAlign:"center",padding:14,color:"#00c853",fontWeight:800,fontSize:15}}>✅ Đã lưu!</div>
+        :<button onClick={save} disabled={saving||!name.trim()} style={{width:"100%",padding:"13px",background:name.trim()?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"#2a2a4a",border:"none",borderRadius:14,color:"#fff",fontWeight:900,fontSize:15,cursor:name.trim()?"pointer":"not-allowed",fontFamily:"inherit",boxShadow:name.trim()?"0 4px 20px #4F8EF755":"none"}}>{saving?"⏳ Đang lưu...":"💾 Lưu"}</button>
+      }
+    </Modal>
+  );
+}
+
+// ── COMMENTS ───────────────────────────────
+export function CommentsSheet({game,user,onClose,theme}:{game:Game;user:User;onClose:()=>void;theme:Theme}) {
+  const [list,setList]=useState<Comment[]>([]); const [text,setText]=useState(""); const [loading,setLoading]=useState(true);
+  const t=getT(theme); const iS=iStyle(theme);
+  const uname=(user.user_metadata?.username as string)||user.email?.split("@")[0]||"Bạn";
+  useEffect(()=>{supabase.from("comments").select("*").eq("game_id",game.id).order("created_at",{ascending:true}).then(({data})=>{if(data)setList(data as Comment[]);setLoading(false);});} ,[game.id]);
+  const send=async()=>{
+    if(!text.trim())return;
+    const{data}=await supabase.from("comments").insert({game_id:game.id,user_id:user.id,username:uname,content:text.trim()}).select().single();
+    if(data)setList(p=>[...p,data as Comment]);
+    setText("");
+    if(game.user_id&&game.user_id!==user.id) await supabase.from("notifications").insert({user_id:game.user_id,type:"comment",message:uname+" bình luận: "+text.trim().slice(0,40)});
+  };
+  return(
+    <Modal onClose={onClose} theme={theme}>
+      <div style={{fontWeight:900,fontSize:16,marginBottom:12,color:t.text}}>{"💬 "+game.name}</div>
+      <div style={{maxHeight:260,overflowY:"auto",marginBottom:12}}>
+        {loading?<div style={{textAlign:"center",color:t.text2,padding:20}}>⏳</div>
+         :list.length===0?<div style={{textAlign:"center",color:t.text2,padding:20,fontSize:13}}>Chưa có bình luận</div>
+         :list.map(c=>(
+          <div key={c.id} style={{background:t.bg3,borderRadius:14,padding:"10px 12px",marginBottom:8,border:"1px solid "+t.border}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontWeight:800,fontSize:12,color:"#4F8EF7"}}>{"@"+c.username}</span>
+              <span style={{fontSize:10,color:t.text2}}>{timeAgo(c.created_at)}</span>
             </div>
+            <div style={{fontSize:13,color:t.text}}>{c.content}</div>
           </div>
-          <span style={{fontSize:20}}>→</span>
-        </div>
-      ))}
+        ))}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <input value={text} onChange={e=>setText(e.target.value)} placeholder="Bình luận..." onKeyDown={e=>e.key==="Enter"&&send()} style={{...iS,marginBottom:0,flex:1}}/>
+        <button onClick={send} disabled={!text.trim()} style={{background:text.trim()?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"#2a2a4a",border:"none",borderRadius:12,padding:"0 16px",color:"#fff",fontWeight:900,cursor:"pointer",fontFamily:"inherit",boxShadow:text.trim()?"0 2px 12px #4F8EF755":"none"}}>Gửi</button>
+      </div>
     </Modal>
   );
 }
 
-// ── GAME SETTINGS ────────────────────────────
-export function GameSettings({game,onSave,onClose,theme}:{
-  game:Game; onSave:(g:Partial<Game>)=>void; onClose:()=>void; theme:Theme;
-}) {
-  const t=getThemeColors(theme);
-  const iS=makeInputStyle(theme);
-  const [name,setName]     = useState(game.name);
-  const [bgIdx,setBgIdx]   = useState(0);
-  const [music,setMusic]   = useState(game.bgMusic||"none");
-  const [isPublic,setIsPublic] = useState(game.is_public||false);
-  const [variables,setVariables] = useState<GameVariable[]>(game.variables||[]);
-  const [newVarName,setNewVarName] = useState("");
-
-  const addVar=()=>{
-    if(!newVarName.trim()) return;
-    setVariables(p=>[...p,{id:"v"+Date.now(),name:newVarName.trim(),defaultValue:"0",varType:"number"}]);
-    setNewVarName("");
-  };
-
+// ── NOTIFICATIONS ──────────────────────────
+export function NotifSheet({user,onClose,theme}:{user:User;onClose:()=>void;theme:Theme}) {
+  const [list,setList]=useState<Notification[]>([]);
+  const t=getT(theme);
+  useEffect(()=>{
+    supabase.from("notifications").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(30).then(({data})=>{if(data)setList(data as Notification[]);});
+    supabase.from("notifications").update({is_read:true}).eq("user_id",user.id).eq("is_read",false).then(()=>{});
+  },[user.id]);
+  const icons:Record<string,string>={comment:"💬",follow:"👥",like:"❤️",system:"📢"};
   return(
     <Modal onClose={onClose} theme={theme}>
-      <div style={{fontWeight:900,fontSize:17,marginBottom:14,textAlign:"center",color:t.text}}>
-        ⚙️ Cài đặt Game
-      </div>
-
-      {/* Name */}
-      <div style={{fontSize:11,color:t.text2,letterSpacing:1,marginBottom:5}}>TÊN GAME</div>
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Tên game..." style={iS}/>
-
-      {/* Background */}
-      <div style={{fontSize:11,color:t.text2,letterSpacing:1,marginBottom:8}}>NỀN SÂN KHẤU</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-        {BG_COLORS.map((bg,i)=>(
-          <button key={i} onClick={()=>setBgIdx(i)} style={{
-            background:bg.sky,border:bgIdx===i?"3px solid #4F8EF7":"2px solid transparent",
-            borderRadius:10,padding:"6px 10px",cursor:"pointer",fontSize:12,
-            color:"#fff",fontWeight:700,fontFamily:"inherit",textShadow:"0 1px 3px rgba(0,0,0,0.8)",
-          }}>{bg.label}</button>
-        ))}
-      </div>
-
-      {/* Music */}
-      <div style={{fontSize:11,color:t.text2,letterSpacing:1,marginBottom:8}}>NHẠC NỀN</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-        {MUSIC_TRACKS.map(tr=>(
-          <button key={tr.id} onClick={()=>setMusic(tr.id)} style={{
-            background:music===tr.id?"#4F8EF7":t.bg3,
-            border:"1px solid "+(music===tr.id?"#4F8EF7":t.border),
-            borderRadius:20,padding:"5px 10px",cursor:"pointer",
-            fontSize:12,color:music===tr.id?"#fff":t.text2,
-            fontWeight:700,fontFamily:"inherit",
-          }}>{tr.label}</button>
-        ))}
-      </div>
-
-      {/* Variables */}
-      <div style={{fontSize:11,color:t.text2,letterSpacing:1,marginBottom:8}}>BIẾN NGƯỜI CHƠI</div>
-      {variables.map((v,i)=>(
-        <div key={v.id} style={{display:"flex",gap:8,marginBottom:6,alignItems:"center"}}>
-          <div style={{flex:1,background:t.bg3,borderRadius:10,padding:"8px 12px",
-            border:"1px solid "+t.border,display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontWeight:700,color:"#00C853"}}>📊 {v.name}</span>
-            <span style={{color:t.text2,fontSize:12}}>= {v.defaultValue}</span>
+      <div style={{fontWeight:900,fontSize:16,marginBottom:12,color:t.text}}>🔔 Thông báo</div>
+      {list.length===0
+        ?<div style={{textAlign:"center",color:t.text2,padding:"24px 0"}}><div style={{fontSize:36}}>🔔</div><div style={{marginTop:8,fontSize:13}}>Chưa có thông báo</div></div>
+        :list.map(n=>(
+          <div key={n.id} style={{background:n.is_read?t.bg3:t.bg2,borderRadius:14,padding:"10px 12px",marginBottom:8,display:"flex",gap:10,border:"1px solid "+(n.is_read?t.border:"#4F8EF755"),boxShadow:n.is_read?"none":"0 2px 12px #4F8EF722"}}>
+            <span style={{fontSize:22}}>{icons[n.type]||"📢"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,color:t.text,lineHeight:1.4}}>{n.message}</div>
+              <div style={{fontSize:10,color:t.text2,marginTop:3}}>{timeAgo(n.created_at)}</div>
+            </div>
+            {!n.is_read&&<div style={{width:8,height:8,borderRadius:"50%",background:"#4F8EF7",flexShrink:0,marginTop:4}}/>}
           </div>
-          <button onClick={()=>setVariables(p=>p.filter((_,j)=>j!==i))} style={{
-            background:"transparent",border:"none",color:"#ff6b6b",fontSize:16,cursor:"pointer",
-          }}>✕</button>
-        </div>
-      ))}
-      <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <input value={newVarName} onChange={e=>setNewVarName(e.target.value)}
-          placeholder="Tên biến (vd: lives, speed...)"
-          onKeyDown={e=>e.key==="Enter"&&addVar()}
-          style={{...iS,marginBottom:0,flex:1}}/>
-        <button onClick={addVar} disabled={!newVarName.trim()} style={{
-          background:"#00C853",border:"none",borderRadius:10,padding:"0 14px",
-          color:"#000",fontWeight:900,cursor:"pointer",fontFamily:"inherit",
-        }}>+</button>
-      </div>
-
-      {/* Public toggle */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-        background:t.bg3,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-        <div>
-          <div style={{fontWeight:700,fontSize:14,color:t.text}}>🌍 Public</div>
-          <div style={{fontSize:11,color:t.text2}}>Cho phép mọi người chơi</div>
-        </div>
-        <button onClick={()=>setIsPublic(p=>!p)} style={{
-          background:isPublic?"#00C853":"#3a3a6a",border:"none",
-          borderRadius:99,width:48,height:26,cursor:"pointer",
-          display:"flex",alignItems:"center",padding:2,
-          transition:"background 0.2s",
-        }}>
-          <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",
-            marginLeft:isPublic?22:2,transition:"margin 0.2s"}}/>
-        </button>
-      </div>
-
-      <button onClick={()=>onSave({
-        name,bgColor:BG_COLORS[bgIdx].sky,groundColor:BG_COLORS[bgIdx].ground,
-        groundBorder:BG_COLORS[bgIdx].groundBorder,bgMusic:music,is_public:isPublic,variables,
-      })} style={{
-        width:"100%",padding:"13px",
-        background:"linear-gradient(135deg,#4F8EF7,#A259FF)",
-        border:"none",borderRadius:12,color:"#fff",fontWeight:900,fontSize:15,
-        cursor:"pointer",fontFamily:"inherit",
-      }}>💾 Lưu cài đặt</button>
+        ))
+      }
     </Modal>
   );
 }
-
-// ── ACTORS PANEL ─────────────────────────────
-export function ActorsPanel({actors,setActors,activeActorId,setActiveActorId,theme}:{
-  actors:SpriteActor[];setActors:React.Dispatch<React.SetStateAction<SpriteActor[]>>;
-  activeActorId:number;setActiveActorId:(id:number)=>void;theme:Theme;
-}) {
-  const t=getThemeColors(theme);
-  const colors=["#4F8EF7","#A259FF","#FFB829","#FF6B6B","#00E5FF","#00c853"];
-  const addActor=()=>{
-    const id=Date.now();
-    setActors(p=>[...p,{id,emoji:"🐶",name:"NV "+(p.length+2),blocks:[],
-      pos:{x:60,y:55},scale:1,rotation:0,hidden:false,
-      color:colors[p.length%colors.length],autoRun:false}]);
-    setActiveActorId(id);
-  };
-  return(
-    <div style={{borderBottom:"1px solid "+t.border,padding:"8px 10px",flexShrink:0}}>
-      <div style={{fontSize:9,color:t.text2,letterSpacing:1,marginBottom:5}}>NHÂN VẬT</div>
-      <div style={{display:"flex",gap:5,overflowX:"auto"}}>
-        <button onClick={()=>setActiveActorId(0)} style={{
-          background:activeActorId===0?"#4F8EF722":"transparent",
-          border:activeActorId===0?"2px solid #4F8EF7":"2px solid "+t.border,
-          borderRadius:10,padding:"4px 8px",cursor:"pointer",flexShrink:0,
-          display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-        }}>
-          <span style={{fontSize:20}}>🎭</span>
-          <span style={{fontSize:8,color:t.text2}}>Chính</span>
-        </button>
-        {actors.map(a=>(
-          <div key={a.id} style={{position:"relative",flexShrink:0}}>
-            <button onClick={()=>setActiveActorId(a.id)} style={{
-              background:activeActorId===a.id?a.color+"22":"transparent",
-              border:activeActorId===a.id?"2px solid "+a.color:"2px solid "+t.border,
-              borderRadius:10,padding:"4px 8px",cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-            }}>
-              <span style={{fontSize:20}}>{a.emoji}</span>
-              <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                <s

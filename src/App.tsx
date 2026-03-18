@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase,getT,iStyle,fmtNum,getLevelFromXP,getXPProgress,LEVEL_NAMES,DEMO_GAMES,GAME_TEMPLATES,Avatar,Game,Theme,AVATAR_COLORS } from "./types";

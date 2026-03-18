@@ -1,37 +1,170 @@
 import { useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
-import { supabase, getT, iStyle, sBtn, fmtNum, getLevelFromXP, LEVEL_TITLES, THUMBNAILS, SPRITES, DEMO_GAMES, GAME_TEMPLATES, Game, Theme } from "./types";
-import { Modal, AuthScreen, CommentsSheet, NotifSheet, ProfileEditor, XPBar, GameCard } from "./components";
+import {
+  supabase, getT, iStyle, sBtn, fmtNum, getLevelFromXP, getXPProgress,
+  LEVEL_NAMES, CATEGORIES, DEMO_GAMES, GAME_TEMPLATES, Avatar,
+  Game, Theme, AVATAR_COLORS, SPRITE_EMOJIS,
+} from "./types";
+import {
+  IconHome, IconGrid, IconCompass, IconBell, IconUser, IconSettings,
+  IconPlay, IconPlus, IconSearch, IconX, IconHeart, IconMessage,
+  IconTrash, IconStar, IconSun, IconMoon, IconChevronRight,
+  IconTrophy, IconGamepad, GameThumb,
+} from "./icons";
+import { Modal, AuthScreen, CommentsSheet, NotifSheet, ProfileEditor, XPBar } from "./components";
 import { Editor } from "./editor";
 import { Player } from "./player";
 
+// ── SIDEBAR ──────────────────────────────────
+function Sidebar({active,onNav,theme,unread}:{active:string;onNav:(s:string)=>void;theme:Theme;unread:number}) {
+  const t = getT(theme);
+  const items = [
+    {id:"home",    label:"Home",    Icon:IconHome},
+    {id:"explore", label:"Explore", Icon:IconCompass},
+    {id:"create",  label:"Create",  Icon:IconGrid},
+    {id:"notifs",  label:"Alerts",  Icon:IconBell, badge:unread},
+    {id:"profile", label:"Profile", Icon:IconUser},
+  ];
+  return(
+    <div style={{
+      position:"fixed", left:0, top:0, bottom:0, width:64,
+      background:t.sidebar, borderRight:"1px solid "+t.border,
+      display:"flex", flexDirection:"column", alignItems:"center",
+      paddingTop:12, paddingBottom:16, zIndex:100,
+      boxShadow:"2px 0 16px rgba(0,0,0,0.15)",
+    }}>
+      {/* Logo */}
+      <div style={{marginBottom:24,padding:"8px 0"}}>
+        <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <IconGamepad size={20} color="#fff"/>
+        </div>
+      </div>
+
+      {/* Nav items */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,width:"100%",padding:"0 8px"}}>
+        {items.map(({id,label,Icon,badge})=>{
+          const isActive = active===id;
+          return(
+            <button key={id} onClick={()=>onNav(id)} style={{
+              position:"relative",width:"100%",padding:"10px 0",border:"none",cursor:"pointer",
+              background:isActive?"linear-gradient(135deg,#4F8EF722,#7C3AED22)":"transparent",
+              borderRadius:10,display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+              color:isActive?"#4F8EF7":t.text2,transition:"all 0.15s",
+              borderLeft:isActive?"2px solid #4F8EF7":"2px solid transparent",
+            }}>
+              <Icon size={18} color={isActive?"#4F8EF7":t.text2}/>
+              <span style={{fontSize:9,fontWeight:isActive?700:400,letterSpacing:0.3}}>{label}</span>
+              {badge&&badge>0?(
+                <span style={{position:"absolute",top:6,right:6,background:"#EF4444",borderRadius:"50%",width:14,height:14,fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>{badge}</span>
+              ):null}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Bottom: theme toggle */}
+      <button onClick={()=>{}} style={{background:"transparent",border:"none",cursor:"pointer",padding:8,color:t.text2}}>
+        <IconSettings size={18} color={t.text2}/>
+      </button>
+    </div>
+  );
+}
+
+// ── GAME CARD ─────────────────────────────────
+function GameCard({game,onClick,onPlay,onComment,onDelete,theme}:{
+  game:Game;onClick:()=>void;onPlay?:()=>void;onComment?:()=>void;onDelete?:(e:React.MouseEvent)=>void;theme:Theme;
+}) {
+  const t = getT(theme);
+  return(
+    <div onClick={onClick} style={{background:t.card,borderRadius:16,overflow:"hidden",cursor:"pointer",border:"1px solid "+t.border,boxShadow:"0 2px 12px rgba(0,0,0,0.12)",transition:"transform 0.15s, box-shadow 0.15s"}}>
+      <GameThumb id={game.id} height={88}/>
+      <div style={{padding:"10px 12px 12px"}}>
+        <div style={{fontWeight:700,fontSize:13,color:t.text,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{game.name}</div>
+        {game.username&&<div style={{fontSize:11,color:t.text2,marginBottom:6}}>@{game.username}</div>}
+        <div style={{display:"flex",gap:10,marginBottom:game.plays!==undefined?6:0}}>
+          {game.plays!==undefined&&(
+            <span style={{display:"flex",alignItems:"center",gap:3,fontSize:11,color:t.text2}}>
+              <IconPlay size={10} color={t.text2}/>{fmtNum(game.plays)}
+            </span>
+          )}
+          {game.likes!==undefined&&(
+            <span style={{display:"flex",alignItems:"center",gap:3,fontSize:11,color:t.text2}}>
+              <IconHeart size={10} color={t.text2}/>{fmtNum(game.likes)}
+            </span>
+          )}
+        </div>
+        {(onPlay||onComment||onDelete)&&(
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {onPlay&&(
+              <button onClick={e=>{e.stopPropagation();onPlay();}} style={{display:"flex",alignItems:"center",gap:4,background:"#00C85322",border:"1px solid #00C85344",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#00C853",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
+                <IconPlay size={10} color="#00C853"/>Play
+              </button>
+            )}
+            {onComment&&(
+              <button onClick={e=>{e.stopPropagation();onComment();}} style={{background:t.bg3,border:"1px solid "+t.border,borderRadius:8,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}>
+                <IconMessage size={12} color={t.text2}/>
+              </button>
+            )}
+            {onDelete&&(
+              <button onClick={onDelete} style={{marginLeft:"auto",background:"transparent",border:"none",cursor:"pointer",padding:4}}>
+                <IconTrash size={13} color={t.text2}/>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── XP BAR ────────────────────────────────────
+export function XPBar({xp,theme}:{xp:number;theme:Theme}) {
+  const t = getT(theme);
+  const level = getLevelFromXP(xp);
+  const prog  = getXPProgress(xp);
+  const name  = LEVEL_NAMES[Math.min(level,LEVEL_NAMES.length-1)]||"Champion";
+  return(
+    <div style={{background:t.bg3,borderRadius:12,padding:"10px 14px",border:"1px solid "+t.border}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <IconTrophy size={14} color="#FFB829"/>
+          <span style={{fontWeight:700,fontSize:12,color:t.text}}>{name} · Lv.{level}</span>
+        </div>
+        <span style={{fontSize:11,color:"#FFB829",fontWeight:600}}>{xp} XP</span>
+      </div>
+      <div style={{background:t.border,borderRadius:99,height:6,overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(90deg,#FFB829,#FF6B35)",height:"100%",width:String(prog)+"%",borderRadius:99,transition:"width 0.6s ease"}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── HOME SCREEN ───────────────────────────────
 export default function App() {
   const [user,setUser]     = useState<User|null>(null);
   const [loading,setLoading] = useState(true);
   const [theme,setTheme]   = useState<Theme>("dark");
   const [screen,setScreen] = useState<"home"|"editor"|"play">("home");
   const [activeGame,setActiveGame] = useState<Game|null>(null);
+  const [sideTab,setSideTab] = useState("home");
   const [myGames,setMyGames] = useState<Game[]>([]);
   const [publicGames,setPublicGames] = useState<Game[]>([]);
   const [userXP,setUserXP] = useState(0);
-  const [homeTab,setHomeTab] = useState<"mine"|"explore">("mine");
-  const [showCreate,setShowCreate]     = useState(false);
+  const [showCreate,setShowCreate]   = useState(false);
   const [showTemplate,setShowTemplate] = useState(false);
-  const [showProfile,setShowProfile]   = useState(false);
+  const [showProfile,setShowProfile] = useState(false);
   const [showEditProfile,setShowEditProfile] = useState(false);
-  const [showNotifs,setShowNotifs]     = useState(false);
+  const [showNotifs,setShowNotifs]   = useState(false);
   const [showC,setShowC]   = useState(false);
   const [cGame,setCGame]   = useState<Game|null>(null);
   const [unread,setUnread] = useState(0);
   const [newName,setNewName] = useState("");
-  const [newThumb,setNewThumb] = useState("🌋");
   const [selTemplate,setSelTemplate] = useState<typeof GAME_TEMPLATES[0]|null>(null);
   const [q,setQ]           = useState("");
   const [results,setResults] = useState<Game[]>([]);
 
-  const t    = getT(theme);
-  const iS   = iStyle(theme);
-  const sB   = sBtn(theme);
+  const t   = getT(theme);
+  const iS  = iStyle(theme);
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setLoading(false);});
@@ -56,10 +189,17 @@ export default function App() {
     return()=>clearTimeout(timer);
   },[q]);
 
+  const handleNav=(id:string)=>{
+    if(id==="create") {setShowCreate(true);return;}
+    if(id==="notifs") {setShowNotifs(true);setUnread(0);return;}
+    if(id==="profile"){setShowProfile(true);return;}
+    setSideTab(id);
+  };
+
   const create=()=>{
     if(!newName.trim()||!user)return;
-    const g:Game={id:"local_"+Date.now(),name:newName.trim(),thumb:newThumb,sprite:selTemplate?.sprite||"🐱",blocks:selTemplate?.blocks?.map((b,i)=>({...b,id:i+1}))||[],variables:selTemplate?.variables||[],actors:[],user_id:user.id};
-    setShowCreate(false);setNewName("");setNewThumb("🌋");setSelTemplate(null);
+    const g:Game={id:"local_"+Date.now(),name:newName.trim(),thumb:"local_"+Date.now(),sprite:selTemplate?.sprite||"cat",blocks:selTemplate?.blocks?.map((b,i)=>({...b,id:i+1}))||[],variables:selTemplate?.variables||[],actors:[],user_id:user.id};
+    setShowCreate(false);setNewName("");setSelTemplate(null);
     setActiveGame(g);setScreen("editor");
   };
 
@@ -76,209 +216,150 @@ export default function App() {
 
   const logout=async()=>{await supabase.auth.signOut();setShowProfile(false);setMyGames([]);};
 
-  if(loading)return<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:48,filter:"drop-shadow(0 4px 16px #4F8EF766)"}}>🎮</div>;
+  if(loading)return(
+    <div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <IconGamepad size={28} color="#fff"/>
+      </div>
+    </div>
+  );
+
   if(!user)return<AuthScreen onAuth={setUser} theme={theme}/>;
   if(screen==="editor"&&activeGame)return<Editor game={activeGame} user={user} onBack={()=>setScreen("home")} onSave={saveGame} theme={theme}/>;
   if(screen==="play"&&activeGame)return<Player game={activeGame} user={user} onBack={()=>setScreen("home")} theme={theme}/>;
 
-  const uname=(user.user_metadata?.username as string)||user.email?.split("@")[0]||"Bạn";
-  const uavatar=(user.user_metadata?.avatar as string)||"😎";
-  const level=getLevelFromXP(userXP);
-  const levelTitle=LEVEL_TITLES[Math.min(level,LEVEL_TITLES.length-1)]||"👑";
+  const uname=(user.user_metadata?.username as string)||user.email?.split("@")[0]||"User";
+  const uidx  = Math.abs(uname.split("").reduce((a,c)=>a+c.charCodeAt(0),0))%AVATAR_COLORS.length;
+  const ucolor = AVATAR_COLORS[uidx];
 
   return(
-    <div style={{fontFamily:"'Nunito',sans-serif",background:t.bg,color:t.text,minHeight:"100vh",maxWidth:480,margin:"0 auto",paddingBottom:90}}>
+    <div style={{fontFamily:"'Nunito',system-ui,sans-serif",background:t.bg,color:t.text,minHeight:"100vh",maxWidth:480,margin:"0 auto",position:"relative"}}>
 
-      {/* TOP BAR */}
-      <div style={{background:t.bg2,padding:"12px 16px 10px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+t.border,boxShadow:"0 2px 20px rgba(0,0,0,0.15)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:26,filter:"drop-shadow(0 2px 8px #4F8EF766)"}}>🎮</span>
+      {/* SIDEBAR */}
+      <Sidebar active={sideTab} onNav={handleNav} theme={theme} unread={unread}/>
+
+      {/* MAIN CONTENT — offset by sidebar width */}
+      <div style={{marginLeft:64,minHeight:"100vh",paddingBottom:24}}>
+
+        {/* TOP BAR */}
+        <div style={{background:t.bg2,padding:"14px 16px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+t.border,boxShadow:"0 2px 16px rgba(0,0,0,0.12)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            {/* Title */}
             <div>
-              <div style={{fontWeight:900,fontSize:20,background:"linear-gradient(90deg,#4F8EF7,#A259FF)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:-0.5}}>GameBuilder</div>
-              <div style={{fontSize:9,color:"#FFB829",fontWeight:700,letterSpacing:0.5}}>{levelTitle} Lv.{level}</div>
+              <div style={{fontWeight:800,fontSize:18,color:t.text,letterSpacing:-0.5}}>
+                {sideTab==="home"?"Home":sideTab==="explore"?"Explore":"My Games"}
+              </div>
+              <div style={{fontSize:11,color:t.text2}}>
+                {sideTab==="home"?"Welcome back, "+uname:sideTab==="explore"?"Discover games":"Your creations"}
+              </div>
+            </div>
+            {/* Right actions */}
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={()=>setTheme(th=>th==="dark"?"light":"dark")} style={{background:t.bg3,border:"1px solid "+t.border,borderRadius:10,padding:8,cursor:"pointer",display:"flex",alignItems:"center"}}>
+                {theme==="dark"?<IconSun size={16} color={t.text2}/>:<IconMoon size={16} color={t.text2}/>}
+              </button>
+              <Avatar name={uname} color={ucolor} size={34}/>
             </div>
           </div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <button onClick={()=>setTheme(th=>th==="dark"?"light":"dark")} style={{...sB,fontSize:15,padding:"5px 8px"}}>{theme==="dark"?"☀️":"🌙"}</button>
-            <button onClick={()=>{setShowNotifs(true);setUnread(0);}} style={{...sB,position:"relative",fontSize:16,padding:"5px 8px"}}>
-              🔔{unread>0&&<span style={{position:"absolute",top:-3,right:-3,background:"linear-gradient(135deg,#EF4444,#FF6B6B)",borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 2px 8px #EF444488"}}>{unread}</span>}
-            </button>
-            {/* Avatar button */}
-            <button onClick={()=>setShowProfile(true)} style={{background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"2px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:38,height:38,fontSize:20,cursor:"pointer",fontWeight:900,color:"#fff",fontFamily:"inherit",boxShadow:"0 3px 16px #4F8EF766",transition:"transform 0.15s"}}>{uavatar}</button>
-          </div>
-        </div>
 
-        {/* XP Bar */}
-        <div style={{marginBottom:10}}><XPBar xp={userXP} theme={theme}/></div>
-
-        {/* Search */}
-        <div style={{position:"relative",marginBottom:8}}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Tìm game..." style={{...iS,marginBottom:0,fontSize:13,paddingLeft:14}}/>
-          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:t.text2,fontSize:18,cursor:"pointer"}}>✕</button>}
-        </div>
-        {q&&(
-          <div style={{background:t.bg2,borderRadius:16,border:"1px solid "+t.border,maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}}>
-            {results.length===0?<div style={{padding:14,color:t.text2,fontSize:12,textAlign:"center"}}>Không tìm thấy</div>
-              :results.map(g=>(
-                <div key={g.id} onClick={()=>{setActiveGame(g);setScreen("play");setQ("");}} style={{display:"flex",gap:12,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid "+t.border,alignItems:"center"}}>
-                  <span style={{fontSize:26}}>{g.thumb}</span>
-                  <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13,color:t.text}}>{g.name}</div><div style={{fontSize:10,color:t.text2}}>{"▶ "+fmtNum(g.plays||0)}</div></div>
-                </div>
-              ))
-            }
-          </div>
-        )}
-
-        {!q&&(
-          <div style={{display:"flex",gap:4,background:t.bg3,borderRadius:16,padding:4,border:"1px solid "+t.border}}>
-            {([{key:"mine" as const,label:"🎒 Của tôi"},{key:"explore" as const,label:"🌍 Khám phá"}]).map(tb=>(
-              <button key={tb.key} onClick={()=>setHomeTab(tb.key)} style={{flex:1,padding:"8px 0",borderRadius:13,border:"none",background:homeTab===tb.key?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"transparent",color:homeTab===tb.key?"#fff":t.text2,fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s",boxShadow:homeTab===tb.key?"0 2px 12px #4F8EF755":"none"}}>{tb.label}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{padding:"0 14px"}}>
-        {homeTab==="mine"&&!q&&(
-          <div style={{marginTop:14}}>
-            {myGames.length===0?(
-              <div style={{background:t.card,borderRadius:20,padding:"28px",textAlign:"center",border:"2px dashed "+t.border,marginTop:6}}>
-                <div style={{fontSize:40,marginBottom:8}}>🕹️</div>
-                <div style={{fontWeight:700,color:t.text2,fontSize:15}}>Chưa có game nào</div>
-                <div style={{fontSize:12,color:t.text2,marginTop:4}}>Nhấn + để tạo game đầu tiên</div>
-              </div>
-            ):(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                {myGames.map(g=>(
-                  <GameCard key={g.id} game={g} theme={theme}
-                    onClick={()=>{setActiveGame(g);setScreen("editor");}}
-                    onPlay={()=>{setActiveGame({...g,username:uname});setScreen("play");}}
-                    onComment={()=>{setCGame(g);setShowC(true);}}
-                    onDelete={e=>del(g.id,e)} showDelete={true}/>
-                ))}
-              </div>
+          {/* Search bar */}
+          <div style={{position:"relative"}}>
+            <div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}>
+              <IconSearch size={15} color={t.text2}/>
+            </div>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search games..."
+              style={{...iS,marginBottom:0,paddingLeft:36,fontSize:13,borderRadius:12}}/>
+            {q&&(
+              <button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center"}}>
+                <IconX size={14} color={t.text2}/>
+              </button>
             )}
+          </div>
 
-            {/* Trending */}
-            <div style={{marginTop:22}}>
-              <div style={{fontWeight:900,fontSize:16,marginBottom:12,color:t.text,display:"flex",alignItems:"center",gap:6}}>🔥 <span>Thịnh hành</span></div>
-              <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:6}}>
-                {DEMO_GAMES.map(g=>(
-                  <div key={g.id} onClick={()=>{setActiveGame(g);setScreen("play");}} style={{background:t.card,borderRadius:16,overflow:"hidden",flexShrink:0,width:130,border:"1px solid "+t.border,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.15)",transition:"transform 0.15s"}}>
-                    <div style={{background:"linear-gradient(135deg,#1e1e4a,#0d0d2a)",height:78,display:"flex",alignItems:"center",justifyContent:"center",fontSize:38}}>{g.thumb}</div>
-                    <div style={{padding:"7px 9px 9px"}}>
-                      <div style={{fontWeight:800,fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:t.text}}>{g.name}</div>
-                      <div style={{fontSize:10,color:t.text2,marginTop:2}}>{g.username}</div>
-                      <div style={{display:"flex",gap:6,marginTop:4}}>
-                        <span style={{fontSize:9,color:"#4F8EF7",fontWeight:700}}>{"▶ "+fmtNum(g.plays||0)}</span>
-                        <span style={{fontSize:9,color:"#EF4444",fontWeight:700}}>{"❤️ "+fmtNum(g.likes||0)}</span>
-                      </div>
+          {/* Search results */}
+          {q&&(
+            <div style={{position:"absolute",left:64,right:0,background:t.bg2,borderRadius:"0 0 16px 16px",border:"1px solid "+t.border,borderTop:"none",maxHeight:220,overflowY:"auto",zIndex:20,boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}}>
+              {results.length===0
+                ?<div style={{padding:"14px 16px",color:t.text2,fontSize:12}}>No results found</div>
+                :results.map(g=>(
+                  <div key={g.id} onClick={()=>{setActiveGame(g);setScreen("play");setQ("");}} style={{display:"flex",gap:12,padding:"10px 16px",cursor:"pointer",borderBottom:"1px solid "+t.border,alignItems:"center",transition:"background 0.1s"}}>
+                    <div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0}}><GameThumb id={g.id} height={36} size={18}/></div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:600,fontSize:13,color:t.text}}>{g.name}</div>
+                      <div style={{fontSize:10,color:t.text2,display:"flex",alignItems:"center",gap:4}}><IconPlay size={9} color={t.text2}/>{fmtNum(g.plays||0)}</div>
                     </div>
+                    <IconChevronRight size={14} color={t.text2}/>
                   </div>
-                ))}
-              </div>
+                ))
+              }
             </div>
+          )}
 
-            {/* Categories */}
-            <div style={{marginTop:22,marginBottom:12}}>
-              <div style={{fontWeight:900,fontSize:16,marginBottom:12,color:t.text}}>🗂️ Thể loại</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                {[{i:"🏃",l:"Action",c:"#EF4444",g:"linear-gradient(135deg,#EF4444,#FF6B6B)"},{i:"🧩",l:"Puzzle",c:"#A259FF",g:"linear-gradient(135deg,#7C3AED,#A259FF)"},{i:"🌍",l:"Adventure",c:"#4F8EF7",g:"linear-gradient(135deg,#2563EB,#4F8EF7)"},{i:"⚔️",l:"RPG",c:"#FFB829",g:"linear-gradient(135deg,#D97706,#FFB829)"},{i:"🏎️",l:"Racing",c:"#00E676",g:"linear-gradient(135deg,#059669,#00E676)"},{i:"🔫",l:"Shooter",c:"#FF4444",g:"linear-gradient(135deg,#DC2626,#FF4444)"}].map(x=>(
-                  <div key={x.l} style={{background:t.card,borderRadius:14,padding:"12px 8px",textAlign:"center",cursor:"pointer",border:"1px solid "+x.c+"33",boxShadow:"0 2px 12px "+x.c+"22",transition:"transform 0.15s"}}>
-                    <div style={{fontSize:24,marginBottom:4}}>{x.i}</div>
-                    <div style={{fontSize:11,fontWeight:800,color:x.c}}>{x.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {homeTab==="explore"&&!q&&(
-          <div style={{marginTop:14}}>
-            <div style={{fontWeight:900,fontSize:16,marginBottom:12,color:t.text}}>🌍 Game cộng đồng</div>
-            {publicGames.length===0?(
-              <div style={{textAlign:"center",color:t.text2,padding:50}}><div style={{fontSize:40}}>🌍</div><div style={{marginTop:10,fontSize:14}}>Chưa có game public</div></div>
-            ):(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                {publicGames.map(g=>(
-                  <GameCard key={g.id} game={g} theme={theme}
-                    onClick={()=>{setActiveGame(g);setScreen("play");}}/>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* FAB */}
-      <button onClick={()=>setShowCreate(true)} style={{position:"fixed",bottom:28,right:22,width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"2px solid rgba(255,255,255,0.2)",fontSize:28,cursor:"pointer",boxShadow:"0 6px 28px rgba(79,142,247,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,color:"#fff",fontFamily:"inherit",transition:"transform 0.15s"}}>+</button>
-
-      {/* CREATE MODAL */}
-      {showCreate&&(
-        <Modal onClose={()=>setShowCreate(false)} theme={theme}>
-          <div style={{fontWeight:900,fontSize:17,marginBottom:14,textAlign:"center",color:t.text}}>🎮 Tạo game mới</div>
-          {/* Template */}
-          <div style={{fontSize:10,color:t.text2,letterSpacing:1,marginBottom:6}}>TEMPLATE</div>
-          <button onClick={()=>setShowTemplate(true)} style={{width:"100%",background:t.bg3,border:"1.5px solid "+(selTemplate?"#4F8EF7":t.border),borderRadius:14,padding:"10px 14px",marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",transition:"all 0.2s"}}>
-            <span style={{fontSize:26}}>{selTemplate?.thumb||"📋"}</span>
-            <div style={{flex:1,textAlign:"left"}}>
-              <div style={{fontWeight:700,fontSize:13,color:t.text}}>{selTemplate?.name||"Chọn template..."}</div>
-              {selTemplate&&<div style={{fontSize:11,color:t.text2}}>{selTemplate.blocks.length+" blocks · "+selTemplate.variables.length+" biến"}</div>}
-            </div>
-            <span style={{color:t.text2,fontSize:18}}>›</span>
-          </button>
-          {/* Thumbnail */}
-          <div style={{fontSize:10,color:t.text2,letterSpacing:1,marginBottom:6}}>THUMBNAIL</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-            {THUMBNAILS.map(tb=>(
-              <button key={tb} onClick={()=>setNewThumb(tb)} style={{background:newThumb===tb?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"transparent",border:newThumb===tb?"2px solid #4F8EF7":"2px solid "+t.border,borderRadius:10,padding:"5px 7px",fontSize:20,cursor:"pointer",transition:"all 0.15s",transform:newThumb===tb?"scale(1.15)":"scale(1)"}}>{tb}</button>
-            ))}
-          </div>
-          <div style={{background:"linear-gradient(135deg,#1e1e4a,#0d0d2a)",borderRadius:16,height:72,display:"flex",alignItems:"center",justifyContent:"center",fontSize:46,marginBottom:12,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>{newThumb}</div>
-          <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Tên game..." onKeyDown={e=>e.key==="Enter"&&create()} style={iS}/>
-          <button onClick={create} disabled={!newName.trim()} style={{width:"100%",padding:"14px",background:newName.trim()?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"#2a2a4a",border:"none",borderRadius:14,color:"#fff",fontWeight:900,fontSize:15,cursor:newName.trim()?"pointer":"not-allowed",fontFamily:"inherit",boxShadow:newName.trim()?"0 4px 20px #4F8EF755":"none",transition:"all 0.2s"}}>🚀 Tạo &amp; Mở Editor</button>
-        </Modal>
-      )}
-
-      {/* TEMPLATE PICKER */}
-      {showTemplate&&(
-        <Modal onClose={()=>setShowTemplate(false)} theme={theme}>
-          <div style={{fontWeight:900,fontSize:17,marginBottom:14,textAlign:"center",color:t.text}}>📋 Chọn Template</div>
-          {GAME_TEMPLATES.map(tmp=>(
-            <div key={tmp.id} onClick={()=>{setSelTemplate(tmp);setShowTemplate(false);}} style={{background:t.bg3,borderRadius:16,padding:"12px 14px",marginBottom:10,cursor:"pointer",border:"1px solid "+t.border,display:"flex",gap:12,alignItems:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.1)",transition:"all 0.15s"}}>
-              <span style={{fontSize:34}}>{tmp.thumb}</span>
-              <div style={{flex:1}}>
-                <div style={{fontWeight:800,fontSize:14,color:t.text}}>{tmp.name}</div>
-                <div style={{fontSize:12,color:t.text2,marginTop:2}}>{tmp.desc}</div>
-                <div style={{display:"flex",gap:8,marginTop:4}}>
-                  <span style={{fontSize:10,color:"#4F8EF7",fontWeight:700}}>{tmp.blocks.length} blocks</span>
-                  <span style={{fontSize:10,color:"#00C853",fontWeight:700}}>{tmp.variables.length} biến</span>
-                </div>
-              </div>
-              <span style={{fontSize:20,color:t.text2}}>→</span>
-            </div>
-          ))}
-        </Modal>
-      )}
-
-      {/* PROFILE MODAL */}
-      {showProfile&&(
-        <Modal onClose={()=>setShowProfile(false)} theme={theme}>
-          <div style={{textAlign:"center",paddingBottom:8}}>
-            <div style={{fontSize:60,marginBottom:8,filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.3))"}}>{uavatar}</div>
-            <div style={{fontWeight:900,fontSize:20,color:t.text}}>{uname}</div>
-            <div style={{fontSize:12,color:t.text2,marginBottom:14}}>{user.email}</div>
-            <div style={{marginBottom:14}}><XPBar xp={userXP} theme={theme}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              {[{label:"Game",value:myGames.length,color:"#4F8EF7",icon:"🎮"},{label:"Blocks",value:myGames.reduce((a,g)=>a+(g.blocks?.length||0),0),color:"#A259FF",icon:"🧩"}].map(s=>(
-                <div key={s.label} style={{background:t.bg3,borderRadius:14,padding:"12px 8px",border:"1px solid "+t.border}}>
-                  <div style={{fontSize:12,marginBottom:3}}>{s.icon}</div>
-                  <div style={{fontSize:22,fontWeight:900,color:s.color}}>{s.value}</div>
-                  <div style={{fontSize:11,color:t.text2}}>{s.label}</div>
-                </div>
+          {/* Tab switcher — only on home */}
+          {!q&&sideTab==="home"&&(
+            <div style={{display:"flex",gap:4,background:t.bg3,borderRadius:12,padding:3,marginTop:10,border:"1px solid "+t.border}}>
+              {([{key:"mine",label:"My Games"},{key:"explore",label:"Explore"}]).map(tb=>(
+                <button key={tb.key} onClick={()=>setSideTab(tb.key)} style={{flex:1,padding:"7px 0",borderRadius:10,border:"none",background:sideTab===tb.key?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"transparent",color:sideTab===tb.key?"#fff":t.text2,fontWeight:sideTab===tb.key?700:400,fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s",boxShadow:sideTab===tb.key?"0 2px 10px #4F8EF755":"none"}}>{tb.label}</button>
               ))}
             </div>
-            <button onClick={()=>{setShowProfile(false);setShowEditProfile(true);}} style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"none",borderRadius:14,color:"#fff",fontSize:14,cursor:"pointer",fontWeight:700,fontFamily:"inherit",marginBottom:8,boxShadow:"0 3px 16px #4F8EF755"}}>✏️ Chỉnh Profile</button>
-            <button onClick={logout} style={{width:"100%",padding:"11px",background:t.bg3,border:"1px solid #EF444444",borderRadius:14,color:"#EF4444",fontSize:14,cursor:"pointer",fontWeight:700,fo
+          )}
+        </div>
+
+        {/* CONTENT */}
+        <div style={{padding:"16px 14px"}}>
+
+          {/* XP bar on home */}
+          {(sideTab==="home"||sideTab==="mine")&&(
+            <div style={{marginBottom:16}}><XPBar xp={userXP} theme={theme}/></div>
+          )}
+
+          {/* MY GAMES */}
+          {(sideTab==="home"||sideTab==="mine")&&!q&&(
+            <>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <span style={{fontWeight:700,fontSize:14,color:t.text}}>My Games</span>
+                <span style={{fontSize:12,color:t.text2}}>{myGames.length} games</span>
+              </div>
+              {myGames.length===0?(
+                <div style={{background:t.card,borderRadius:16,padding:28,textAlign:"center",border:"2px dashed "+t.border,marginBottom:20}}>
+                  <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><IconGrid size={32} color={t.text2}/></div>
+                  <div style={{fontWeight:600,color:t.text2,fontSize:14}}>No games yet</div>
+                  <div style={{fontSize:12,color:t.text2,marginTop:4}}>Click + in the sidebar to create</div>
+                </div>
+              ):(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+                  {myGames.map(g=>(
+                    <GameCard key={g.id} game={g} theme={theme}
+                      onClick={()=>{setActiveGame(g);setScreen("editor");}}
+                      onPlay={()=>{setActiveGame({...g,username:uname});setScreen("play");}}
+                      onComment={()=>{setCGame(g);setShowC(true);}}
+                      onDelete={e=>del(g.id,e)}/>
+                  ))}
+                </div>
+              )}
+
+              {/* Trending section */}
+              <div style={{marginBottom:8}}>
+                <div style={{fontWeight:700,fontSize:14,color:t.text,marginBottom:12}}>Trending Now</div>
+                <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:6}}>
+                  {DEMO_GAMES.map(g=>(
+                    <div key={g.id} onClick={()=>{setActiveGame(g);setScreen("play");}} style={{background:t.card,borderRadius:14,overflow:"hidden",flexShrink:0,width:136,border:"1px solid "+t.border,cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}>
+                      <GameThumb id={g.id} height={76} size={32}/>
+                      <div style={{padding:"8px 10px 10px"}}>
+                        <div style={{fontWeight:700,fontSize:12,color:t.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{g.name}</div>
+                        <div style={{fontSize:10,color:t.text2,marginTop:2}}>@{g.username}</div>
+                        <div style={{display:"flex",gap:8,marginTop:5}}>
+                          <span style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:t.text2}}><IconPlay size={9} color={t.text2}/>{fmtNum(g.plays||0)}</span>
+                          <span style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:t.text2}}><IconHeart size={9} color={t.text2}/>{fmtNum(g.likes||0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Categories */}
+              <div style={{marginTop:20}}>
+                <div style={{fontWeight:700,fontSize:14,color:t.text,marginBottom:12}}>Categories</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  {[{label:"Action",color:"#EF4444"},{label:"Puzzle",color:"#A259FF"},{label:"Adventure",color:"#4F8EF7"},{label:"RPG",color:"#FFB829"

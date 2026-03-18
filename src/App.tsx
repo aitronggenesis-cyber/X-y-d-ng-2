@@ -362,4 +362,127 @@ export default function App() {
               <div style={{marginTop:20}}>
                 <div style={{fontWeight:700,fontSize:14,color:t.text,marginBottom:12}}>Categories</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  {[{label:"Action",color:"#EF4444"},{label:"Puzzle",color:"#A259FF"},{label:"Adventure",color:"#4F8EF7"},{label:"RPG",color:"#FFB829"
+                  {[{label:"Action",color:"#EF4444"},{label:"Puzzle",color:"#A259FF"},{label:"Adventure",color:"#4F8EF7"},{label:"RPG",color:"#FFB829"},{label:"Racing",color:"#00E676"},{label:"Shooter",color:"#FF6B6B"}].map(c=>(
+                    <div key={c.label} style={{background:t.card,borderRadius:12,padding:"14px 10px",textAlign:"center",cursor:"pointer",border:"1px solid "+c.color+"33",transition:"transform 0.15s"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:c.color,margin:"0 auto 6px"}}/>
+                      <div style={{fontSize:11,fontWeight:600,color:t.text}}>{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* EXPLORE */}
+          {sideTab==="explore"&&!q&&(
+            <>
+              <div style={{fontWeight:700,fontSize:14,color:t.text,marginBottom:12}}>Community Games</div>
+              {publicGames.length===0?(
+                <div style={{textAlign:"center",color:t.text2,padding:48}}>
+                  <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><IconCompass size={36} color={t.text2}/></div>
+                  <div style={{fontSize:14}}>No public games yet</div>
+                </div>
+              ):(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  {publicGames.map(g=>(
+                    <GameCard key={g.id} game={g} theme={theme} onClick={()=>{setActiveGame(g);setScreen("play");}}/>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* FAB */}
+      <button onClick={()=>setShowCreate(true)} style={{position:"fixed",bottom:24,right:20,width:52,height:52,borderRadius:"50%",background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"none",cursor:"pointer",boxShadow:"0 4px 20px rgba(79,142,247,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,transition:"transform 0.15s"}}>
+        <IconPlus size={22} color="#fff"/>
+      </button>
+
+      {/* CREATE MODAL */}
+      {showCreate&&(
+        <Modal onClose={()=>setShowCreate(false)} theme={theme}>
+          <div style={{fontWeight:800,fontSize:17,marginBottom:14,color:t.text}}>New Game</div>
+
+          {/* Template */}
+          <div style={{fontSize:11,color:t.text2,letterSpacing:0.5,marginBottom:6,textTransform:"uppercase"}}>Template</div>
+          <button onClick={()=>setShowTemplate(true)} style={{width:"100%",background:t.bg3,border:"1.5px solid "+(selTemplate?"#4F8EF7":t.border),borderRadius:12,padding:"11px 14px",marginBottom:12,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",transition:"all 0.2s"}}>
+            <div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0}}>
+              <GameThumb id={selTemplate?.id||"blank"} height={36} size={18}/>
+            </div>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontWeight:600,fontSize:13,color:t.text}}>{selTemplate?.name||"Choose a template"}</div>
+              {selTemplate&&<div style={{fontSize:11,color:t.text2}}>{selTemplate.blocks.length+" blocks · "+selTemplate.variables.length+" variables"}</div>}
+            </div>
+            <IconChevronRight size={16} color={t.text2}/>
+          </button>
+
+          {/* Name */}
+          <div style={{fontSize:11,color:t.text2,letterSpacing:0.5,marginBottom:6,textTransform:"uppercase"}}>Game Name</div>
+          <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Enter game name..." onKeyDown={e=>e.key==="Enter"&&create()} style={iS}/>
+
+          <button onClick={create} disabled={!newName.trim()} style={{width:"100%",padding:"13px",background:newName.trim()?"linear-gradient(135deg,#4F8EF7,#7C3AED)":"#2a2a4a",border:"none",borderRadius:12,color:"#fff",fontWeight:700,fontSize:15,cursor:newName.trim()?"pointer":"not-allowed",fontFamily:"inherit",boxShadow:newName.trim()?"0 4px 18px #4F8EF755":"none",transition:"all 0.2s"}}>
+            Create &amp; Open Editor
+          </button>
+        </Modal>
+      )}
+
+      {/* TEMPLATE PICKER */}
+      {showTemplate&&(
+        <Modal onClose={()=>setShowTemplate(false)} theme={theme}>
+          <div style={{fontWeight:800,fontSize:17,marginBottom:14,color:t.text}}>Choose Template</div>
+          {GAME_TEMPLATES.map(tmp=>(
+            <div key={tmp.id} onClick={()=>{setSelTemplate(tmp);setShowTemplate(false);}} style={{background:t.bg3,borderRadius:14,padding:"12px 14px",marginBottom:10,cursor:"pointer",border:"1px solid "+t.border,display:"flex",gap:12,alignItems:"center",transition:"all 0.15s"}}>
+              <div style={{width:44,height:44,borderRadius:10,overflow:"hidden",flexShrink:0}}><GameThumb id={tmp.id} height={44} size={22}/></div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14,color:t.text}}>{tmp.name}</div>
+                <div style={{fontSize:12,color:t.text2,marginTop:2}}>{tmp.desc}</div>
+                <div style={{display:"flex",gap:10,marginTop:5}}>
+                  <span style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#4F8EF7",fontWeight:600}}><IconCode size={10} color="#4F8EF7"/>{tmp.blocks.length} blocks</span>
+                  <span style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#00C853",fontWeight:600}}><IconStar size={10} color="#00C853"/>{tmp.variables.length} vars</span>
+                </div>
+              </div>
+              <IconChevronRight size={16} color={t.text2}/>
+            </div>
+          ))}
+        </Modal>
+      )}
+
+      {/* PROFILE MODAL */}
+      {showProfile&&(
+        <Modal onClose={()=>setShowProfile(false)} theme={theme}>
+          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:18}}>
+            <Avatar name={uname} color={ucolor} size={56}/>
+            <div>
+              <div style={{fontWeight:800,fontSize:18,color:t.text}}>{uname}</div>
+              <div style={{fontSize:12,color:t.text2}}>{user.email}</div>
+            </div>
+          </div>
+          <div style={{marginBottom:14}}><XPBar xp={userXP} theme={theme}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {[{label:"Games",value:myGames.length,color:"#4F8EF7"},{label:"Blocks",value:myGames.reduce((a,g)=>a+(g.blocks?.length||0),0),color:"#A259FF"}].map(s=>(
+              <div key={s.label} style={{background:t.bg3,borderRadius:12,padding:"12px",border:"1px solid "+t.border,textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div>
+                <div style={{fontSize:11,color:t.text2}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={()=>{setShowProfile(false);setShowEditProfile(true);}} style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,#4F8EF7,#7C3AED)",border:"none",borderRadius:12,color:"#fff",fontSize:14,cursor:"pointer",fontWeight:700,fontFamily:"inherit",marginBottom:8}}>Edit Profile</button>
+          <button onClick={logout} style={{width:"100%",padding:"11px",background:t.bg3,border:"1px solid #EF444433",borderRadius:12,color:"#EF4444",fontSize:14,cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Sign Out</button>
+        </Modal>
+      )}
+
+      {showEditProfile&&user&&<ProfileEditor user={user} onClose={()=>setShowEditProfile(false)} theme={theme}/>}
+      {showNotifs&&user&&<NotifSheet user={user} onClose={()=>setShowNotifs(false)} theme={theme}/>}
+      {showC&&cGame&&user&&<CommentsSheet game={cGame} user={user} onClose={()=>setShowC(false)} theme={theme}/>}
+
+      <style>{`
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+        *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+        ::-webkit-scrollbar{width:4px;height:4px;}
+        ::-webkit-scrollbar-thumb{background:#4F8EF744;border-radius:99px;}
+      `}</style>
+    </div>
+  );
+}
